@@ -1,17 +1,9 @@
 import numpy as np
-from matplotlib import pyplot as plt
 import os
-
-import seaborn as sns
-import pandas as pd
-
 
 from src.run import utils
 from src.data_utils import plotting
 from src.samplers.importance_sampler import *
-
-
-from src.solvers import analytical_approx as AA
 
 
 def map_names(
