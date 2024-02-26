@@ -1,5 +1,57 @@
-matplotlib==3.5.1
-numpy==1.22.2
-pandapower==2.8.0
-scipy==1.8.0
-tqdm==4.62.3
+archspec @ file:///croot/archspec_1697725767277/work
+boltons @ file:///croot/boltons_1677628695607/work
+Brotli @ file:///tmp/abs_7b7c6urbus/croots/recipe/brotli-split_1659616059979/work
+certifi @ file:///croot/certifi_1707229178800/work/certifi
+cffi @ file:///croot/cffi_1700254291660/work
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+conda @ file:///croot/conda_1708369122326/work
+conda-content-trust @ file:///croot/conda-content-trust_1693490625810/work
+conda-libmamba-solver @ file:///croot/conda-libmamba-solver_1706733287605/work/src
+conda-package-handling @ file:///croot/conda-package-handling_1690999940573/work
+conda_package_streaming @ file:///croot/conda-package-streaming_1690987971148/work
+contourpy==1.2.0
+cryptography @ file:///croot/cryptography_1707523711350/work
+cvxpy-base==1.4.2
+cycler==0.12.1
+deepdiff==6.7.1
+distro @ file:///croot/distro_1701455007193/work
+ecos==2.0.13
+fonttools==4.49.0
+idna @ file:///croot/idna_1666125574438/work
+jsonpatch @ file:///tmp/build/80754af9/jsonpatch_1615747632069/work
+jsonpointer==2.1
+kiwisolver==1.4.5
+libmambapy @ file:///croot/mamba-split_1704219419639/work/libmambapy
+matplotlib==3.8.3
+menuinst @ file:///croot/menuinst_1706732935122/work
+networkx==3.2.1
+numpy==1.26.4
+ordered-set==4.1.0
+packaging @ file:///croot/packaging_1693575181127/work
+pandapower==2.13.1
+pandas==2.2.1
+pillow==10.2.0
+platformdirs @ file:///croot/platformdirs_1692205440364/work
+pluggy @ file:///opt/conda/conda-bld/pluggy_1648109264631/work
+ply==3.11
+pybind11==2.11.1
+pycosat @ file:///croot/pycosat_1696536507716/work
+pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
+Pyomo==6.7.1
+pyOpenSSL @ file:///croot/pyopenssl_1708380413537/work
+pyparsing==3.1.1
+PySocks @ file:///home/ktietz/ci_310/pysocks_1643727729738/work
+python-dateutil==2.8.2
+pytz==2024.1
+requests @ file:///croot/requests_1707355576692/work
+ruamel.yaml @ file:///croot/ruamel.yaml_1666307131939/work
+ruamel.yaml.clib @ file:///croot/ruamel.yaml.clib_1666302244777/work
+scipy==1.12.0
+scs==3.2.4.post1
+seaborn==0.13.2
+six==1.16.0
+tqdm @ file:///croot/tqdm_1679561868826/work
+truststore @ file:///croot/truststore_1695244291232/work
+tzdata==2024.1
+urllib3 @ file:///croot/urllib3_1707770556049/work
+zstandard @ file:///croot/zstandard_1677013116773/work
