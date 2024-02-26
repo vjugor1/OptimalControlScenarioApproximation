@@ -50,7 +50,6 @@ def main():
         Delta_poly,
         Pi_tau_sample,
         ramp_up_down,
-        optimize_samples,
     ) = utils.initialize_multistep(grid_name=grid_name, eta=eta, T=T)
 
     # Solve scenario approximations
