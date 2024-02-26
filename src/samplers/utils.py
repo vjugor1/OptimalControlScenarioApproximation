@@ -117,7 +117,7 @@ def check_feasibility_out_of_sample(
     # A: np.ndarray,
     t_factors: np.ndarray,
     N: int = 1000,
-) -> np.float:
+) -> float:
     """AI is creating summary for check_feasibility_out_of_sample
 
     Args:
@@ -128,7 +128,7 @@ def check_feasibility_out_of_sample(
         N (int, optional): Number of samples. Defaults to 1000.
 
     Returns:
-        np.float: Probability of `x` being feasible estimate
+        float: Probability of `x` being feasible estimate
     """
     # Sample from nominal
     # samples = np.random.multivariate_normal(

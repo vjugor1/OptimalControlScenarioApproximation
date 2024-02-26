@@ -6,6 +6,7 @@ import pandas as pd
 from src.data_utils import grid_data
 from src.samplers import preprocessing as pre
 from src.solvers import scenario_approx as SA
+from src.solvers import dro as DRO
 from src.solvers import utils as SU
 from src.samplers.utils import check_feasibility_out_of_sample
 from src.samplers import utils as sampling
@@ -98,6 +99,64 @@ def initialize_multistep(grid_name: str, eta: float, T: int):
         ramp_up_down,
     )
 
+def initialize_multistep_dro(grid_name: str, eta: float, T: int):
+    (
+        Gamma,
+        Beta,
+        gens,
+        cost_coeffs,
+        cost_correction_term,
+        cost_dc_opf,
+    ) = grid_data.get_linear_constraints(grid_name, check_pp_vs_new_form=False)
+    x0 = gens[1:]
+    alpha_0 = np.ones(len(x0)) / len(x0)  # np.array([0.5, 0.5])
+    x0 = np.hstack((x0, alpha_0))
+    print(Gamma, Beta)
+    mu = np.zeros(len(gens) - 1)
+    Sigma = np.eye(len(gens) - 1) * 0.01
+    # making matrix psd
+    Sigma = Sigma.dot(Sigma.T)
+    # A = Gamma
+    Gamma, Beta, A = pre.standartize(Gamma, Beta, mu, Sigma)
+    print(len(Gamma), len(Beta))
+    J = Gamma.shape[0]
+    print(len(A))
+    c = cost_coeffs
+    c = np.hstack((c, np.zeros(len(c))))
+    sigmas_sq = np.ones((T, Gamma.shape[1])) * 0.001
+    Sigma = sigmas_sq
+    kappa_t = sigmas_sq.cumsum()[Gamma.shape[1] - 1 :][
+        :: Gamma.shape[1]
+    ]  # equivalent to np.array([sigmas[:i, :] for i in range(T)])
+
+    t_factors = np.sqrt(kappa_t)
+
+    Pi_tau_sample, Delta_poly = sampling.get_sampling_poly(
+        Gamma, Beta, np.ones(len(alpha_0)), T, eta, sigmas_sq
+    )
+    # N = 400
+    ramp_up_down = np.ones(len(x0) // 2) * 2  # np.array([5, 7])
+    delta_alpha = np.ones(len(x0) // 2) * 0.2
+
+    return (
+        Gamma,
+        A,
+        Beta,
+        gens,
+        x0,
+        alpha_0,
+        delta_alpha,
+        c,
+        J,
+        cost_correction_term,
+        cost_dc_opf,
+        mu,
+        Sigma,
+        t_factors,
+        Delta_poly,
+        Pi_tau_sample,
+        ramp_up_down,
+    )
 
 def generate_samples_multistep(
     N0: int,
@@ -126,6 +185,60 @@ def generate_samples_multistep(
 
     return all_samples_SAIMIN, all_samples_SCSA
 
+def multiple_solve_dro(
+    x0,
+    N0,
+    ks,
+    L,
+    all_samples_SAIMIN,
+    all_samples_SCSA,
+    Sigma,
+    mu,
+    Gamma,
+    Beta,
+    ramp_up_down,
+    T,
+    alpha_0,
+    delta_alpha,
+    c,
+):
+    results = {
+        "Sigma": [[float(v) for v in row] for row in Sigma],
+        "mu": [float(v) for v in mu],
+    }
+    x0_dict = {"DD-DRO": x0}
+    for k in tqdm(ks):
+        N = N0 * k
+        print(k, " / ", ks[-1])
+        for l in range(L):
+
+            samples_SCSA = all_samples_SCSA[:N, :, l]
+            model, solver = DRO.dd_dro_model(
+                Gamma, Beta, ramp_up_down, T, alpha_0, delta_alpha, samples_SCSA
+            )
+            solver.solve(model)
+            # try:
+            #     SCSA_sol, SCSA_status = SU.solve_glpk(eqs, ineqs, x0, c)
+            # except cp.error.SolverError:
+            #     pass
+            res = {
+                "DD-DRO": [DRO_sol.flatten(), DRO_status],
+            }
+            for k__ in res.keys():
+                res[k__][0] = [float(v) for v in res[k__][0]]
+            status = True
+            for v in res.values():
+                status = status and v[1]
+            assert status
+            for k in x0_dict.keys():
+                x0_dict[k] = res[k][0]
+            try:
+                results[N].append(res)
+            except KeyError:
+                results[N] = []
+                results[N].append(res)
+        print("Finished N = ", N)
+    return results
 
 def multiple_solve(
     x0,
