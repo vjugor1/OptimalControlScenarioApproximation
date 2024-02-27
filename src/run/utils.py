@@ -12,6 +12,8 @@ from src.samplers.utils import check_feasibility_out_of_sample
 from src.samplers import utils as sampling
 from scipy import stats
 import cvxpy as cp
+import logging
+from pyomo.util.infeasible import log_infeasible_constraints
 
 
 def initialize(grid_name: str, eta: float) -> tuple:
@@ -190,8 +192,7 @@ def multiple_solve_dro(
     N0,
     ks,
     L,
-    all_samples_SAIMIN,
-    all_samples_SCSA,
+    all_samples,
     Sigma,
     mu,
     Gamma,
@@ -201,6 +202,10 @@ def multiple_solve_dro(
     alpha_0,
     delta_alpha,
     c,
+    cost_correction_term,
+    M = 0.1,
+    theta = 0.,
+    eta=0.0,
 ):
     results = {
         "Sigma": [[float(v) for v in row] for row in Sigma],
@@ -212,11 +217,16 @@ def multiple_solve_dro(
         print(k, " / ", ks[-1])
         for l in range(L):
 
-            samples_SCSA = all_samples_SCSA[:N, :, l]
+            samples = all_samples[:N, :, l]
             model, solver = DRO.dd_dro_model(
-                Gamma, Beta, ramp_up_down, T, alpha_0, delta_alpha, samples_SCSA
+                Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
             )
-            solver.solve(model)
+            log_infeasible_constraints(model, log_expression=True, log_variables=True)
+            logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
+
+            # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
+            solution = solver.solve(model)
+            print("obj = ", model.obj() + cost_correction_term)
             # try:
             #     SCSA_sol, SCSA_status = SU.solve_glpk(eqs, ineqs, x0, c)
             # except cp.error.SolverError:

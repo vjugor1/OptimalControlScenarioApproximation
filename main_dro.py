@@ -28,7 +28,7 @@ def main():
     grid_name = "grid14"
     save_dir = os.path.join("saves", "dd-dro")
     save_dir = os.path.join(save_dir, grid_name)
-    eta = 0.01
+    eta = 0.1
     optimize_samples = True
     T = 3  # time snapshots
 
@@ -41,7 +41,7 @@ def main():
         alpha_0,
         delta_alpha,
         c,
-        J,
+        J, 
         cost_correction_term,
         cost_dc_opf,
         mu,
@@ -50,7 +50,6 @@ def main():
         Delta_poly,
         Pi_tau_sample,
         ramp_up_down,
-        optimize_samples,
     ) = utils.initialize_multistep(grid_name=grid_name, eta=eta, T=T)
 
     # Solve scenario approximations
@@ -67,6 +66,28 @@ def main():
     all_samples_SAIMIN, all_samples_SCSA = utils.generate_samples_multistep(
         N0, ks, t_factors, L, eta, Delta_poly, Pi_tau_sample
     )
+    # all_samples_SAIMIN *= 0
+    # all_samples_SCSA *= 0
+    results = utils.multiple_solve_dro(
+    x0,
+    N0,
+    ks,
+    L,
+    all_samples_SCSA,
+    Sigma,
+    mu,
+    Gamma,
+    Beta,
+    ramp_up_down,
+    T,
+    alpha_0,
+    delta_alpha,
+    c,
+    M = 50,
+    theta = 1e-4,
+    eta=eta,
+    cost_correction_term=cost_correction_term
+)
     # parallel and discard useless planes and samples
     # results = utils.multiple_solve(
     #     x0,

@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libgdal-dev \
     libeccodes-dev \
+    libglpk-dev python3.8-dev libgmp3-dev \
+    glpk-utils libglpk-dev glpk-doc \ 
+    gcc g++ gfortran git cmake liblapack-dev pkg-config --install-recommends \
     gcc && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -25,7 +28,8 @@ RUN apt-get update && apt-get install -y \
 RUN echo "conda activate base" >> ~/.bashrc
 SHELL ["/bin/bash", "--login", "-c"]
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    conda install -c conda-forge ipopt=3.11.1
 
 # Demonstrate the environment is activated:
 RUN echo "Make sure cfgrib is installed:"
