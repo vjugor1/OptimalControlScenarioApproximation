@@ -25,12 +25,12 @@ def map_names(
 
 def main():
     # config
-    grid_name = "grid14"
+    grid_name = "grid57"
     save_dir = os.path.join("saves", "dd-dro")
     save_dir = os.path.join(save_dir, grid_name)
-    eta = 0.1
+    eta = 0.15
     optimize_samples = True
-    T = 3  # time snapshots
+    T = 2 #3 for 14, 30  # time snapshots
 
     (
         Gamma,
@@ -57,7 +57,7 @@ def main():
 
     N0 = 3
     ks = list(range(1, 221))[::30]
-    L = 2
+    L = 200
 
     np.random.seed(228)
 
@@ -83,40 +83,23 @@ def main():
     alpha_0,
     delta_alpha,
     c,
-    M = 50,
-    theta = 1e-4,
+    M = 50, #50 for case14, case30
+    theta = 1e-4, #1e-4 for case14, case30
     eta=eta,
     cost_correction_term=cost_correction_term
 )
-    # parallel and discard useless planes and samples
-    # results = utils.multiple_solve(
-    #     x0,
-    #     N0,
-    #     ks,
-    #     L,
-    #     all_samples_SAIMIN,
-    #     all_samples_SCSA,
-    #     Sigma,
-    #     mu,
-    #     Gamma,
-    #     Beta,
-    #     ramp_up_down,
-    #     T,
-    #     alpha_0,
-    #     delta_alpha,
-    #     c,
-    # )
 
 
     # save the results
-    # utils.save_results(save_dir, results, N0, ks, eta)
+    utils.save_results(save_dir, results, N0, ks, eta)
+
 
     # results = utils.map_names(
     #     results,
     #     new_names=["SA-ScenarioApprox", "SAIS-ScenarioApproxImportanceSampling"],
     # )
 
-    # # processing results for plotting average behaviour on L different computations
+    # # # processing results for plotting average behaviour on L different computations
     # try:
     #     names = list(results[N0][ks[0]].keys())
     # except KeyError:
@@ -138,15 +121,15 @@ def main():
     #     N0,
     # )
 
-    # # shaping into pandas
+    # # # shaping into pandas
     # pd_boxplot = utils.estimates_to_pandas(
     #     scenario_probs_several_starts, ks, N0, names, eta, save_dir
     # )
 
-    # # 1 - beta plot
+    # # # 1 - beta plot
     # plotting.plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names)
 
-    # # box plots
+    # # # box plots
     # plotting.plot_boxplots(pd_boxplot, save_dir, N0, ks, eta)
 
 

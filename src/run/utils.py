@@ -14,6 +14,7 @@ from scipy import stats
 import cvxpy as cp
 import logging
 from pyomo.util.infeasible import log_infeasible_constraints
+from pyomo.common.errors import ApplicationError
 
 
 def initialize(grid_name: str, eta: float) -> tuple:
@@ -225,8 +226,14 @@ def multiple_solve_dro(
             logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
 
             # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
-            solution = solver.solve(model)
-            print("obj = ", model.obj() + cost_correction_term)
+            try:
+                solution = solver.solve(model, tee=False)
+            except (ApplicationError, ValueError):
+                pass
+            # print("obj = ", model.obj() + cost_correction_term)
+            DRO_sol = np.array([model.p0[k].value for k in model.p0] + [model.alpha[k].value for k in model.alpha])
+            DRO_status = str(solution["Solver"][0]['Status'])
+
             # try:
             #     SCSA_sol, SCSA_status = SU.solve_glpk(eqs, ineqs, x0, c)
             # except cp.error.SolverError:
@@ -343,6 +350,18 @@ def save_results(save_dir, results, N0, ks, eta):
         os.makedirs(save_dir)
         with open(os.path.join(save_dir, json_file), "w") as fp:
             json.dump(results, fp, indent=4)
+
+def load_results(cfg):
+    eta = cfg.estimation.eta
+    N = cfg.estimation.N_SA
+    path_res = os.path.join(cfg.paths.saves_dir, cfg.estimation.grid, f"N_{N}_eta_{eta}.json")
+    path_dro = os.path.join(cfg.paths.saves_dir, cfg.paths.dro_results, cfg.estimation.grid, f"N_{N}_eta_{eta}.json")
+    with open(path_res, 'r') as f:
+        json_res = json.load(f)
+    with open(path_dro, 'r') as f:
+        json_dro = json.load(f)
+    return json_res, json_dro
+
 
 
 def unpack_results(results, c, k, cost_correction_term, A, N0):

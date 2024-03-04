@@ -25,12 +25,12 @@ def map_names(
 
 def main():
     # config
-    grid_name = "grid14"
+    grid_name = "grid57"
     save_dir = "saves"
     save_dir = os.path.join(save_dir, grid_name)
-    eta = 0.01
+    eta = 0.15 #0.1 for 14, 30
     optimize_samples = True
-    T = 3  # time snapshots
+    T = 2 #3 for 14, 30  # time snapshots  # time snapshots
 
     (
         Gamma,
@@ -87,43 +87,43 @@ def main():
     # save the results
     utils.save_results(save_dir, results, N0, ks, eta)
 
-    results = utils.map_names(
-        results,
-        new_names=["SA-ScenarioApprox", "SAIS-ScenarioApproxImportanceSampling"],
-    )
+    # results = utils.map_names(
+    #     results,
+    #     new_names=["SA-ScenarioApprox", "SAIS-ScenarioApproxImportanceSampling"],
+    # )
 
-    # processing results for plotting average behaviour on L different computations
-    try:
-        names = list(results[N0][ks[0]].keys())
-    except KeyError:
-        names = list(results[str(N0)][ks[0]].keys())
+    # # processing results for plotting average behaviour on L different computations
+    # try:
+    #     names = list(results[N0][ks[0]].keys())
+    # except KeyError:
+    #     names = list(results[str(N0)][ks[0]].keys())
 
-    scenario_probs_several_starts = utils.estimate_probs(
-        results,
-        eta,
-        Gamma,
-        ramp_up_down,
-        Beta,
-        L,
-        T,
-        t_factors,
-        ks,
-        c,
-        cost_correction_term,
-        A,
-        N0,
-    )
+    # scenario_probs_several_starts = utils.estimate_probs(
+    #     results,
+    #     eta,
+    #     Gamma,
+    #     ramp_up_down,
+    #     Beta,
+    #     L,
+    #     T,
+    #     t_factors,
+    #     ks,
+    #     c,
+    #     cost_correction_term,
+    #     A,
+    #     N0,
+    # )
 
-    # shaping into pandas
-    pd_boxplot = utils.estimates_to_pandas(
-        scenario_probs_several_starts, ks, N0, names, eta, save_dir
-    )
+    # # shaping into pandas
+    # pd_boxplot = utils.estimates_to_pandas(
+    #     scenario_probs_several_starts, ks, N0, names, eta, save_dir
+    # )
 
-    # 1 - beta plot
-    plotting.plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names)
+    # # 1 - beta plot
+    # plotting.plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names)
 
-    # box plots
-    plotting.plot_boxplots(pd_boxplot, save_dir, N0, ks, eta)
+    # # box plots
+    # plotting.plot_boxplots(pd_boxplot, save_dir, N0, ks, eta)
 
 
 # Gamma, Beta = synth.regular_polyhedron(10, 6)
