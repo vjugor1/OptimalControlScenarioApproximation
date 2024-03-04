@@ -1,0 +1,8 @@
+estimation:
+  N_SA: 633
+  eta: 0.1
+  grid: grid14
+
+paths:
+  saves_dir: /app/saves
+  dro_results: /app/saves/dd-dro
