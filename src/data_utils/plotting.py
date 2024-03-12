@@ -177,7 +177,7 @@ def plot_1_delta(
     xlims = [
         0,
         N,
-    ]  # further will be refined accoridng to the last method reached \hat{\delta} = 1.0
+    ]  # further will be refined accoridng to the last method reached \hat{\rho} = 1.0
     N_reached_1 = []
     plt.figure(figsize=(fig_xsize, fig_ysize))
     names = pd_boxplot["Method"].unique()
@@ -211,7 +211,7 @@ def plot_1_delta(
         plt.plot(x_plot, y_plot, label=names[i], alpha=0.5, linewidth=2.5)
         # plt.plot(np.array(ks)[1:] * N0, scenario_prob_esimate[i, 1:], label=names[i])
     plt.xlabel("N", fontsize=fsize)
-    plt.ylabel(r"$1 - \hat{\delta}$", fontsize=fsize)
+    plt.ylabel(r"$1 - \hat{\rho}$", fontsize=fsize)
     plt.grid()
     xlims[-1] = np.max(N_reached_1) + 20
     plt.xlim(xlims)
@@ -325,29 +325,47 @@ def plot_grids(pds, save_dir, eta, include_O=True, truncate_names=True):
             fsize=fsize,
         )
 
-def plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names):
-    plt.figure(figsize=(10, 10))
+def plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names, col_name=r"$(\hat{\mathbb{P}}_N)_l$"):
+    plt.figure(figsize=(10, 5))
     fsize = 16
-    figure_path_1_beta = os.path.join(
-        save_dir,
-        "figures",
-        "1_beta_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
-    )
+    if col_name == r"$(\hat{\mathbb{P}}_N)_l$":
+        figure_path_1_beta = os.path.join(
+            save_dir,
+            "figures",
+            "1_beta_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
+        )
+    else:
+        figure_path_1_beta = os.path.join(
+            save_dir,
+            "figures",
+            "exec_time_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
+        )
     for i in range(len(names)):
         pdSeries_tmp = pd_boxplot.loc[
             (pd_boxplot["Method"] == names[i]) & (pd_boxplot["N"] > 2)
         ]
         # pdSeries_tmp.loc[:, "Prob_est - 1-eta"] = pdSeries_tmp["Prob_est - 1-eta"].apply(lambda x: 1.0 if x >= 0 else 0.0)
-        pdSeries_tmp.loc[:, r"$(\hat{\mathbb{P}}_N)_l$"] = (
-            pdSeries_tmp[r"$(\hat{\mathbb{P}}_N)_l$"] > 1 - eta
-        ).values
+        if col_name == r"$(\hat{\mathbb{P}}_N)_l$":
+            pdSeries_tmp.loc[:, col_name] = (
+                pdSeries_tmp[col_name] > 1 - eta
+            ).values
+        
+        pdSeries_tmp = pdSeries_tmp.drop(columns=["Method"])
         pdSeries_tmp = pdSeries_tmp.groupby("N").mean()
         x_plot = pdSeries_tmp.index
-        y_plot = pdSeries_tmp[r"$(\hat{\mathbb{P}}_N)_l$"].values
+        if col_name == r"$(\hat{\mathbb{P}}_N)_l$":
+            y_plot = pdSeries_tmp[col_name].values
+        else:
+            y_plot = pdSeries_tmp[col_name].values
+            plt.yscale('log')
+        
         plt.plot(x_plot, y_plot, label=names[i], alpha=0.8)
         # plt.plot(np.array(ks)[1:] * N0, scenario_prob_esimate[i, 1:], label=names[i])
     plt.xlabel("N", fontsize=fsize)
-    plt.ylabel(r"$1 - \hat{\delta}$", fontsize=fsize)
+    if col_name == r"$(\hat{\mathbb{P}}_N)_l$":
+        plt.ylabel(r"$1 - \hat{\rho}$", fontsize=fsize)
+    else:
+        plt.ylabel("Exec. Time", fontsize=fsize)
     plt.grid()
     plt.legend(prop={"size": fsize})
     try:
@@ -357,30 +375,40 @@ def plot_1_minus_beta(pd_boxplot, save_dir, N0, ks, eta, names):
         os.makedirs(os.path.join(save_dir, "figures"))
         plt.savefig(figure_path_1_beta)
 
-def plot_boxplots(pd_boxplot, save_dir, N0, ks, eta):
-    figure_path_box = os.path.join(
-        save_dir,
-        "figures",
-        "boxplot_J_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
-    )
-    plt.figure(figsize=(20, 5))
+def plot_boxplots(pd_boxplot, save_dir, N0, ks, eta, col_name=r"$(\hat{\mathbb{P}}_N)_l$"):
+    if col_name == r"$(\hat{\mathbb{P}}_N)_l$":
+        figure_path_box = os.path.join(
+            save_dir,
+            "figures",
+            "boxplot_J_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
+        )
+    else:
+        figure_path_box = os.path.join(
+            save_dir,
+            "figures",
+            "boxplot_time_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".png",
+        )
+    plt.figure(figsize=(10, 5))
     ax = sns.boxplot(
         x="N",
-        y=r"$(\hat{\mathbb{P}}_N)_l$",
+        y=col_name,
         hue="Method",
         data=pd_boxplot[pd_boxplot["N"] > 1],
         palette="Set3",
     )
-    ax.axhline(
-        1 - eta,
-        0,
-        1,
-        label=r"$1 - \eta$",
-        color="black",
-        linewidth=2,
-        alpha=0.7,
-        linestyle="dotted",
-    )
+    if col_name != 'Exec. Time':
+        ax.axhline(
+            1 - eta,
+            0,
+            1,
+            label=r"$1 - \eta$",
+            color="black",
+            linewidth=2,
+            alpha=0.7,
+            linestyle="dotted",
+        )
+    # if col_name == 'Exec. Time':
+        # ax.set_yscale('log')
     # plt.ylim((1 - 2 * eta, 1.))
     plt.legend()
     # plt.hlines(y = [1-eta], xmin = pd_boxplot["N"].min(), xmax = pd_boxplot["N"].max(), label=r'$1 - \eta$', color='black', linestyle='dotted')

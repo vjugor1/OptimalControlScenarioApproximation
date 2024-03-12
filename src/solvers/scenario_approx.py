@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import stats
+from pyomo.environ import *
 
 
 # def SA_constr_control(Gamma, Beta, ramp_up_down, T, alpha_0, delta_alpha, samples):
@@ -12,7 +13,7 @@ from scipy import stats
 #     Pi_tau = np.array(sorted(Pi_tau, key=lambda x: np.argmax(x)))
 #     Gamma_xalpha = np.hstack((Gamma, np.zeros(Gamma.shape)))
 #     ineq_init_gen = (Gamma_xalpha, Beta)
-#     ## participation factors: S^1_\Delta
+#     ## participation factors: S^1_\rho
 #     One_alpha = np.hstack((np.zeros(Gamma.shape[1]), np.ones(Gamma.shape[1])))
 #     eq_pfs = (One_alpha, 1)
 #     I_alpha = np.hstack(
@@ -97,7 +98,7 @@ def SA_constr_control(Gamma, Beta, ramp_up_down, T, alpha_0, delta_alpha, sample
     Gamma_pfs = np.vstack((I_alpha, -I_alpha))
     rhs_pfs = np.hstack((delta_alpha + alpha_0, delta_alpha - alpha_0))
 
-    # participation factors \in \S^1_{\Delta}
+    # participation factors \in \S^1_{\rho}
     Gamma_simplex = -I_alpha
     rhs_simplex = np.zeros(I_alpha.shape[0])
 
@@ -179,3 +180,75 @@ def get_scenario_approx_constraints(
         out_Beta = np.concatenate([out_Beta, Beta_O], axis=0)
 
     return out_Gamma, out_Beta
+
+
+
+
+
+def SA_model_pyomo(W, b, R, T, alpha_0, x0, c, data, M, eps, theta):
+
+    # Model
+    m = ConcreteModel()
+
+    # Index sets
+    m.J_indxs = Set(initialize=range(W.shape[0]))
+    m.tau_indxs = Set(initialize=range(T))
+    m.p_indxs = Set(initialize=range(W.shape[1]))
+    # m.t_indxs = Set(initialize=[0])
+    m.data_indxs = Set(initialize=range(data.shape[0]))
+
+
+    # Variables
+    ## Continuous
+    m.p0 = Var(m.p_indxs, domain=NonNegativeReals, initialize=x0[:len(m.p_indxs)])
+    m.alpha = Var(m.p_indxs, domain=PositiveReals, initialize=alpha_0)
+
+    # Constraints
+
+    ## Sum participation factors
+    def pf_rule(m):
+        return np.dot(m.alpha, (np.ones(len(m.alpha)))) == 1
+    
+    def pf_rule_vicinity(m, i):
+        return np.abs(m.alpha[i] - 1 / len(m.alpha)) <= 0.2
+
+    m.pf_vicinity = Constraint(m.p_indxs, rule=pf_rule_vicinity)
+
+    m.pf_sum = Constraint(rule=pf_rule)
+
+    ## Grid technical limits
+    def dist_grid_rule(m, i, n, tau):
+        
+        # return -(W[i,:].dot(m.alpha) * data[n, tau] - b[i] + W[i,:].dot(m.p0)) + M * m.q[n] * (np.abs(W[i,:].dot(m.alpha))) >= (m.t[0] - m.s[n]) * (np.abs(W[i,:].dot(m.alpha)))
+        return -(W[i,:].dot(m.alpha) * data[n, tau] - b[i] + W[i,:].dot(m.p0))  >= 0
+        # return -(W[i,:].dot(m.alpha) * data[n, tau] - b[i] + W[i,:].dot(m.p0)) / (np.abs(W[i,:].dot(m.alpha))) + M * m.q[n]  >= (m.t[0] - m.s[n]) 
+    
+    m.dist_grid = Constraint(m.J_indxs, m.data_indxs, m.tau_indxs, rule=dist_grid_rule)
+
+    ## Grid ramp up/down
+    def dist_rampup_rule(m, ng, n, tau):
+        # return -( m.alpha[ng] * data[n, tau] - R[ng]) + M * m.q[n] * np.abs(m.alpha[ng]) >= (m.t[0] - m.s[n]) * np.abs(m.alpha[ng])
+        # return -( m.alpha[ng] * data[n, tau] - R[ng]) / np.abs(m.alpha[ng]) + M * m.q[n] >= (m.t[0] - m.s[n])
+        return -( m.alpha[ng] * data[n, tau] - R[ng])  >= 0
+        # return -( m.alpha[ng] * data[n, tau] - R[ng]) / np.abs(m.alpha[ng])  >= 0
+    def dist_rampdown_rule(m, ng, n, tau):
+        # return -(-m.alpha[ng] * data[n, tau] - R[ng]) + M * m.q[n] * np.abs(m.alpha[ng]) >= (m.t[0] - m.s[n]) * np.abs(m.alpha[ng])
+        return -(-m.alpha[ng] * data[n, tau] - R[ng]) >= 0
+        # return -(-m.alpha[ng] * data[n, tau] - R[ng]) / np.abs(m.alpha[ng])  >= 0
+
+    m.rampup = Constraint(m.p_indxs, m.data_indxs, m.tau_indxs, rule=dist_rampup_rule)
+    m.rampdown = Constraint(m.p_indxs, m.data_indxs, m.tau_indxs, rule=dist_rampdown_rule)
+
+    # Objective function
+    def objective_rule(m):
+        return c[:len(m.p0)].dot(m.p0)
+    
+    m.obj = Objective(rule=objective_rule)
+
+    solver = SolverFactory('mindtpy')
+    # solver = SolverFactory('octeract')
+    
+    # solver = SolverFactory('ipopt')
+    # solver.options['tol'] = 1e-3
+    # solver.options['max_iter'] = 10000
+    return m, solver

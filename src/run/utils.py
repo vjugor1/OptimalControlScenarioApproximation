@@ -1,7 +1,9 @@
 import numpy as np
 from tqdm import tqdm
+import time
 import os, json
 import pandas as pd
+from omegaconf import DictConfig
 
 from src.data_utils import grid_data
 from src.samplers import preprocessing as pre
@@ -43,7 +45,7 @@ def initialize(grid_name: str, eta: float) -> tuple:
     return Gamma, A, Beta, gens, x0, c, J, cost_correction_term, cost_dc_opf, mu, Sigma
 
 
-def initialize_multistep(grid_name: str, eta: float, T: int):
+def initialize_multistep(cfg: DictConfig, grid_name: str, eta: float, T: int):
     (
         Gamma,
         Beta,
@@ -58,6 +60,8 @@ def initialize_multistep(grid_name: str, eta: float, T: int):
     print(Gamma, Beta)
     mu = np.zeros(len(gens) - 1)
     Sigma = np.eye(len(gens) - 1) * 0.01
+    if cfg.data is not None:
+        Sigma *= cfg.data.sigma_scale
     # making matrix psd
     Sigma = Sigma.dot(Sigma.T)
     # A = Gamma
@@ -189,11 +193,13 @@ def generate_samples_multistep(
     return all_samples_SAIMIN, all_samples_SCSA
 
 def multiple_solve_dro(
+    cfg,
     x0,
     N0,
     ks,
     L,
     all_samples,
+    all_samples_IS,
     Sigma,
     mu,
     Gamma,
@@ -212,35 +218,96 @@ def multiple_solve_dro(
         "Sigma": [[float(v) for v in row] for row in Sigma],
         "mu": [float(v) for v in mu],
     }
-    x0_dict = {"DD-DRO": x0}
+    if cfg.solution.dro is not None:
+        x0_dict = {"DD-DRO": x0, "SA": x0, "AR-SA": x0}
+    else:
+        x0_dict = {"SA": x0, "AR-SA": x0}
     for k in tqdm(ks):
         N = N0 * k
         print(k, " / ", ks[-1])
         for l in range(L):
 
             samples = all_samples[:N, :, l]
-            model, solver = DRO.dd_dro_model(
+            if cfg.solution.dro is not None:
+                model, solver = DRO.dd_dro_model(
+                    Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
+                )
+                # log_infeasible_constraints(model, log_expression=True, log_variables=True)
+                # logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
+
+                # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
+                t1 = time.time()
+                try:
+                    solution = solver.solve(model, tee=False, logging_level=50,)
+                    
+                    DRO_sol = np.array([model.p0[k].value for k in model.p0] + [model.alpha[k].value for k in model.alpha])
+                    DRO_status = str(solution["Solver"][0]['Status'])
+                    
+                except (ApplicationError, ValueError):
+                    DRO_sol = np.array([model.p0[k].value for k in model.p0] + [model.alpha[k].value for k in model.alpha])
+                    DRO_status = 'infeasible'
+                    # DRO_time = None
+                # print("obj = ", model.obj() + cost_correction_term)
+                t2 = time.time()
+                DRO_time = t2-t1
+            
+            samples = all_samples[:N, :, l]
+            model_SA, solver_SA = SA.SA_model_pyomo(
                 Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
             )
-            log_infeasible_constraints(model, log_expression=True, log_variables=True)
-            logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
+            # log_infeasible_constraints(model, log_expression=True, log_variables=True)
+            # logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
 
             # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
+            t1 = time.time()
             try:
-                solution = solver.solve(model, tee=False)
-            except (ApplicationError, ValueError):
-                pass
-            # print("obj = ", model.obj() + cost_correction_term)
-            DRO_sol = np.array([model.p0[k].value for k in model.p0] + [model.alpha[k].value for k in model.alpha])
-            DRO_status = str(solution["Solver"][0]['Status'])
+                
+                solution_SA = solver_SA.solve(model_SA, tee=False, logging_level=50,)
+                
+                SA_sol = np.array([model_SA.p0[k].value for k in model_SA.p0] + [model_SA.alpha[k].value for k in model_SA.alpha])
+                SA_status = str(solution_SA["Solver"][0]['Status'])
+                
+            except (ApplicationError, ValueError, TypeError):
+                SA_sol = np.array([model_SA.p0[k].value for k in model_SA.p0] + [model_SA.alpha[k].value for k in model_SA.alpha])
+                SA_status = 'infeasible'
+                # SA_time = None
+            t2 = time.time()
+            SA_time = t2-t1
+            samples = all_samples_IS[:N, :, l]
+            model_IS, solver_IS = SA.SA_model_pyomo(
+                Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
+            )
+            # log_infeasible_constraints(model_IS, log_expression=True, log_variables=True)
+            # logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
 
-            # try:
-            #     SCSA_sol, SCSA_status = SU.solve_glpk(eqs, ineqs, x0, c)
-            # except cp.error.SolverError:
-            #     pass
-            res = {
-                "DD-DRO": [DRO_sol.flatten(), DRO_status],
-            }
+            # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
+            t1 = time.time()
+            try:
+                
+                solution_IS = solver_IS.solve(model_IS, tee=False, logging_level=50,)
+                
+                IS_sol = np.array([model_IS.p0[k].value for k in model_IS.p0] + [model_IS.alpha[k].value for k in model_IS.alpha])
+                IS_status = str(solution_IS["Solver"][0]['Status'])
+                
+            except (ApplicationError, ValueError, TypeError):
+                IS_sol = np.array([model_IS.p0[k].value for k in model_IS.p0] + [model_IS.alpha[k].value for k in model_IS.alpha])
+                IS_status = 'infeasible'
+                # IS_time = None
+            t2 = time.time()
+            IS_time = t2-t1
+            if cfg.solution.dro is not None:
+                res = {
+                    "DD-DRO": [DRO_sol.flatten(), DRO_status, DRO_time],
+                    "SA": [SA_sol.flatten(), SA_status, SA_time],
+                    "AR-SA": [IS_sol.flatten(), IS_status, IS_time],
+                }
+            else:
+                res = {
+                    "SA": [SA_sol.flatten(), SA_status, SA_time],
+                    "AR-SA": [IS_sol.flatten(), IS_status, IS_time],
+                }
+
+
             for k__ in res.keys():
                 res[k__][0] = [float(v) for v in res[k__][0]]
             status = True
@@ -278,7 +345,7 @@ def multiple_solve(
         "Sigma": [[float(v) for v in row] for row in Sigma],
         "mu": [float(v) for v in mu],
     }
-    x0_dict = {"SAIMIN": x0, "SCSA": x0}
+    x0_dict = {"AR-SA": x0, "SA": x0}
     for k in tqdm(ks):
         N = N0 * k
         print(k, " / ", ks[-1])
@@ -302,8 +369,8 @@ def multiple_solve(
             except cp.error.SolverError:
                 pass
             res = {
-                "SCSA": [SCSA_sol.flatten(), SCSA_status],
-                "SAIMIN": [SAIMIN_sol.flatten(), SAIMIN_status],
+                "SA": [SCSA_sol.flatten(), SCSA_status],
+                "AR-SA": [SAIMIN_sol.flatten(), SAIMIN_status],
             }
             for k__ in res.keys():
                 res[k__][0] = [float(v) for v in res[k__][0]]
@@ -354,12 +421,20 @@ def save_results(save_dir, results, N0, ks, eta):
 def load_results(cfg):
     eta = cfg.estimation.eta
     N = cfg.estimation.N_SA
-    path_res = os.path.join(cfg.paths.saves_dir, cfg.estimation.grid, f"N_{N}_eta_{eta}.json")
-    path_dro = os.path.join(cfg.paths.saves_dir, cfg.paths.dro_results, cfg.estimation.grid, f"N_{N}_eta_{eta}.json")
-    with open(path_res, 'r') as f:
-        json_res = json.load(f)
-    with open(path_dro, 'r') as f:
-        json_dro = json.load(f)
+    path_res = os.path.join(cfg.paths.saves_dir, cfg.grid, f"N_{N}_eta_{eta}.json")
+    path_dro = os.path.join(cfg.paths.saves_dir, cfg.paths.dro_results, cfg.grid, f"N_{N}_eta_{eta}.json")
+    try:
+        with open(path_res, 'r') as f:
+            json_res = json.load(f)
+    except FileNotFoundError:
+        print("Not found results for SA and AR-SA")
+        json_res = None
+    try:
+        with open(path_dro, 'r') as f:
+            json_dro = json.load(f)
+    except FileNotFoundError:
+        print("Not found results for DRO")
+        json_dro = None
     return json_res, json_dro
 
 
@@ -371,6 +446,7 @@ def unpack_results(results, c, k, cost_correction_term, A, N0):
         names = list(results[str(N0)][k].keys())
     fns = []
     xs = []
+    exec_time = []
     for r in results.keys():
         if r not in ["Sigma", "mu"]:
             for v in results[r][k].values():
@@ -380,18 +456,31 @@ def unpack_results(results, c, k, cost_correction_term, A, N0):
                     else:
                         xs.append(v[0])
                     fns.append(np.dot(xs[-1], c) + cost_correction_term)
+                    try:
+                        exec_time.append(v[2])
+                    except IndexError:
+                        pass
                 except ValueError:
                     fns.append(np.nan)
+                    try:
+                        exec_time.append(v[2])
+                    except IndexError:
+                        pass
     fns = np.array(fns).reshape(-1, len(names))
     xs = np.array(xs).reshape(-1, len(names), A.shape[1] * 2)
-    return fns, xs, names
+    if len(exec_time) > 0:
+        exec_time = np.array(exec_time).reshape(-1, len(names))
+    else:
+        exec_time = None
+    return fns, xs, names, exec_time
 
 
-def estimate_probs(results, eta, Gamma, ramp_up_down, Beta, L, T, t_factors, ks, c, cost_correction_term, A, N0):
-    scenario_prob_estimate = np.zeros((len(names), len(ks)))
+def estimate_probs(results, eta, Gamma, ramp_up_down, Beta, L, T, t_factors, ks, c, cost_correction_term, A, N0, names_):
+    scenario_prob_estimate = np.zeros((len(names_), len(ks)))
     scenario_probs_several_starts = []
+    exec_times_several_starts = []
     for k in tqdm(range(L)):
-        fns, xs, names = unpack_results(
+        fns, xs, names, exec_time = unpack_results(
             results=results, c=c, cost_correction_term=cost_correction_term, k=k, A=A, N0=N0
         )
         scenarios_probs = np.array(
@@ -409,10 +498,12 @@ def estimate_probs(results, eta, Gamma, ramp_up_down, Beta, L, T, t_factors, ks,
 
         scenario_prob_estimate += scenarios_probs - (1 - eta) >= 0.0
         scenario_probs_several_starts.append(scenarios_probs)
+        exec_times_several_starts.append(exec_time)
     scenario_prob_esimate = scenario_prob_estimate / L
     scenario_probs_several_starts = np.array(np.stack(scenario_probs_several_starts))
+    exec_times_several_starts = np.array(np.stack(exec_times_several_starts))
 
-    return scenario_probs_several_starts
+    return scenario_probs_several_starts, exec_times_several_starts
 
 def estimates_to_pandas(scenario_probs_several_starts, ks, N0, names, eta, save_dir):
     pd_boxplot = pd.DataFrame({"N": [], "Method": [], r"$(\hat{\mathbb{P}}_N)_l$": []})
@@ -440,6 +531,38 @@ def estimates_to_pandas(scenario_probs_several_starts, ks, N0, names, eta, save_
     # save to csv
     pandas_name = (
         "multistarts_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".csv"
+    )
+    # save to csv
+    # pandas_name = 'multistarts.csv'
+    pd_boxplot.to_csv(os.path.join(save_dir, pandas_name))
+    return pd_boxplot
+
+def exec_time_to_pandas(exec_times, ks, N0, names, eta, save_dir):
+    pd_boxplot = pd.DataFrame({"N": [], "Method": [], "Exec. Time": []})
+    for method_idx in range(exec_times.shape[2]):
+        data = exec_times[:, :, method_idx]
+        pd_boxplot_tmp = pd.DataFrame(
+            {"N": [], "Method": [], "Exec. Time": []}
+        )
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]):
+                pd_boxplot_tmp = pd.concat(
+                    [
+                        pd_boxplot_tmp,
+                        pd.DataFrame(
+                            {
+                                "N": [ks[j] * N0],
+                                "Method": [names[method_idx]],
+                                "Exec. Time": [data[i, j]],
+                            }
+                        ),
+                    ],
+                    ignore_index=True,
+                )
+        pd_boxplot = pd.concat([pd_boxplot, pd_boxplot_tmp])
+    # save to csv
+    pandas_name = (
+        "exec_time_N_" + str(N0 * ks[-1]) + "_eta_" + str(np.round(eta, 2)) + ".csv"
     )
     # save to csv
     # pandas_name = 'multistarts.csv'
