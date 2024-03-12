@@ -1,8 +1,9 @@
 import numpy as np
 import os
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from src.run import utils
-from src.data_utils import plotting
 from src.samplers.importance_sampler import *
 
 
@@ -22,15 +23,16 @@ def map_names(
                     l[new_names[i]] = l.pop(keys[i])
     return results
 
-
-def main():
+@hydra.main(version_base=None, config_path="conf", config_name="config_grid6")
+def main(cfg: DictConfig) -> None:
     # config
-    grid_name = "grid57"
-    save_dir = os.path.join("saves", "dd-dro")
-    save_dir = os.path.join(save_dir, grid_name)
-    eta = 0.15
-    optimize_samples = True
-    T = 2 #3 for 14, 30  # time snapshots
+    grid_name = cfg.grid
+    # save_dir = os.path.join("saves", "dd-dro")
+    # save_dir = os.path.join(save_dir, grid_name)
+    save_dir = os.path.join(cfg.paths.dro_results, cfg.grid)
+    eta = cfg.solution.eta #0.1 for grid14, grid30, 0.15 for grid56
+    # optimize_samples = True
+    T = cfg.solution.T #3 for grid14, grid30, 2 for grid57  # time snapshots
 
     (
         Gamma,
@@ -50,15 +52,22 @@ def main():
         Delta_poly,
         Pi_tau_sample,
         ramp_up_down,
-    ) = utils.initialize_multistep(grid_name=grid_name, eta=eta, T=T)
+    ) = utils.initialize_multistep(cfg, grid_name=grid_name, eta=eta, T=T)
 
     # Solve scenario approximations
     # Store sigma and mu, next, the solutions for approximation will be pushed
 
-    N0 = 3
-    ks = list(range(1, 221))[::30]
-    L = 200
-
+    N0 = cfg.solution.N0
+    ks = list(range(1, cfg.solution.k))[::cfg.solution.N_step]
+    L = cfg.solution.L
+    if cfg.solution.dro is not None:
+        M = cfg.solution.dro.M
+    else:
+        M = None
+    if cfg.solution.dro is not None:
+        theta = cfg.solution.dro.theta
+    else:
+        theta = None
     np.random.seed(228)
 
     # parallel and discard useless planes and samples
@@ -69,11 +78,13 @@ def main():
     # all_samples_SAIMIN *= 0
     # all_samples_SCSA *= 0
     results = utils.multiple_solve_dro(
+    cfg,
     x0,
     N0,
     ks,
     L,
     all_samples_SCSA,
+    all_samples_SAIMIN,
     Sigma,
     mu,
     Gamma,
@@ -83,8 +94,8 @@ def main():
     alpha_0,
     delta_alpha,
     c,
-    M = 50, #50 for case14, case30
-    theta = 1e-4, #1e-4 for case14, case30
+    M = M, 
+    theta = theta, 
     eta=eta,
     cost_correction_term=cost_correction_term
 )
