@@ -1,15 +1,15 @@
-grid: grid14
+grid: grid30
 
 estimation:
-  N_SA: 363
-  eta: 0.01
-  plot_exec_time: True
+  N_SA: 453
+  eta: 0.05
+  plot_exec_time: False
 
 solution:
   T: 3
-  eta: 0.01
-  N0: 3 #N_SA = list(range(1, k))[::N_step][-1]
-  k: 150
+  eta: 0.05
+  N0: 3 
+  k: 160
   N_step: 30
   L: 50
   dro: null

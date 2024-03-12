@@ -1,0 +1,24 @@
+grid: grid6
+
+estimation:
+  N_SA: 102 #22
+  eta: 0.1
+  plot_exec_time: True
+
+solution:
+  T: 3
+  eta: 0.1
+  N0: 2 #N_SA = list(range(1, k))[::N_step][-1]
+  k: 60 #20
+  N_step: 10
+  L: 50
+  dro:
+    M: 0.1
+    theta: 0.001
+
+data:
+  sigma_scale: 1
+
+paths:
+  saves_dir: /app/saves
+  dro_results: /app/saves/dd-dro
