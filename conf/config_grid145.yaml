@@ -1,7 +1,7 @@
-grid: grid30
+grid: grid145
 
 estimation:
-  N_SA: 453
+  N_SA: 633
   eta: 0.01
   plot_exec_time: False
 
@@ -9,14 +9,13 @@ solution:
   T: 3
   eta: 0.01
   N0: 3 
-  k: 160
-  N_step: 30
-  L: 50
+  k: 10
+  N_step: 4
+  L: 10
   make_reduction: false
   dro: null
     
-data:
-  sigma_scale: 1
+
 
 
 paths:

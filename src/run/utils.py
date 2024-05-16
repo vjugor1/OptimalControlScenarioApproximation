@@ -4,6 +4,8 @@ import time
 import os, json
 import pandas as pd
 from omegaconf import DictConfig
+from sklearn.cluster import KMeans
+from kmodes.kmodes import KModes
 
 from src.data_utils import grid_data
 from src.samplers import preprocessing as pre
@@ -12,6 +14,7 @@ from src.solvers import dro as DRO
 from src.solvers import utils as SU
 from src.samplers.utils import check_feasibility_out_of_sample
 from src.samplers import utils as sampling
+from src.samplers import scenario_reducers as sr
 from scipy import stats
 import cvxpy as cp
 import logging
@@ -219,9 +222,13 @@ def multiple_solve_dro(
         "mu": [float(v) for v in mu],
     }
     if cfg.solution.dro is not None:
-        x0_dict = {"DD-DRO": x0, "SA": x0, "AR-SA": x0}
+        x0_dict = {"DD-DRO": x0, "SA": x0, "AR-SA": x0, "SA-FF": x0, "SA-SB": x0, "SA-KMeans": x0,
+        #  "SA-KModes": x0
+         }
     else:
-        x0_dict = {"SA": x0, "AR-SA": x0}
+        x0_dict = {"SA": x0, "AR-SA": x0, "SA-FF": x0, "SA-SB": x0, "SA-KMeans": x0,
+        #  "SA-KModes": x0
+         }
     for k in tqdm(ks):
         N = N0 * k
         print(k, " / ", ks[-1])
@@ -251,14 +258,128 @@ def multiple_solve_dro(
                 t2 = time.time()
                 DRO_time = t2-t1
             
-            samples = all_samples[:N, :, l]
-            model_SA, solver_SA = SA.SA_model_pyomo(
-                Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
-            )
+            
             # log_infeasible_constraints(model, log_expression=True, log_variables=True)
             # logging.basicConfig(filename='infesibility.log', encoding='utf-8', level=logging.INFO)
 
             # solution = solver.solve(model, strategy="OA", mip_solver='glpk', nlp_solver='ipopt')
+            if cfg.solution.make_reduction:
+                # samples_r = all_samples[:N, :, l]
+                ## fast forward
+                scenarios = all_samples[:, :, l].T
+                t11 = time.time()
+                probabilities = np.random.rand(scenarios.shape[1])
+                probabilities = probabilities / np.sum(probabilities)
+                S = sr.ScenarioReduction(scenarios, probabilities=probabilities, cost_func='General', r=2, scen0=np.zeros(scenarios.shape[0]))
+                S.fast_forward_sel(n_sc_red=N, num_threads = 4) 
+                t22 = time.time()
+                samples_r = S.scenarios_reduced.T
+                model_SA_r, solver_SA_r = SA.SA_model_pyomo(
+                    Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples_r, M, eta, theta
+                )
+                # with a-priori scenario reduction methods from Römisch, 2003
+
+                t1 = time.time()
+                try:
+                    
+                    solution_SA_r = solver_SA_r.solve(model_SA_r, tee=False, logging_level=50,)
+                    
+                    SA_r_sol = np.array([model_SA_r.p0[k].value for k in model_SA_r.p0] + [model_SA_r.alpha[k].value for k in model_SA_r.alpha])
+                    SA_r_status = str(solution_SA_r["Solver"][0]['Status'])
+                    
+                except (ApplicationError, ValueError, TypeError):
+                    SA_r_sol = np.array([model_SA_r.p0[k].value for k in model_SA_r.p0] + [model_SA_r.alpha[k].value for k in model_SA_r.alpha])
+                    SA_r_status = 'infeasible'
+                    # SA_time = None
+                t2 = time.time()
+                SA_r_time = t2-t1 + t22-t11 #scenario reduction + solution
+
+                ## simultaneous backward
+                scenarios = all_samples[:, :, l].T
+                t11 = time.time()
+                probabilities = np.random.rand(scenarios.shape[1])
+                probabilities = probabilities / np.sum(probabilities)
+                S = sr.ScenarioReduction(scenarios, probabilities=probabilities, cost_func='General', r=2, scen0=np.zeros(scenarios.shape[0]))
+                # S.fast_forward_sel(n_sc_red=N, num_threads = 4) 
+                S.simult_backward_red(n_sc_red=N, num_threads = 4)
+                t22 = time.time()
+                samples_r_sb = S.scenarios_reduced.T
+                model_SA_r_sb, solver_SA_r_sb = SA.SA_model_pyomo(
+                    Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples_r_sb, M, eta, theta
+                )
+                # with a-priori scenario reduction methods from Römisch, 2003
+
+                t1 = time.time()
+                try:
+                    
+                    solution_SA_r_sb = solver_SA_r_sb.solve(model_SA_r_sb, tee=False, logging_level=50,)
+                    
+                    SA_r_sb_sol = np.array([model_SA_r_sb.p0[k].value for k in model_SA_r_sb.p0] + [model_SA_r_sb.alpha[k].value for k in model_SA_r_sb.alpha])
+                    SA_r_sb_status = str(solution_SA_r_sb["Solver"][0]['Status'])
+                    
+                except (ApplicationError, ValueError, TypeError):
+                    SA_r_sb_sol = np.array([model_SA_r_sb.p0[k].value for k in model_SA_r_sb.p0] + [model_SA_r_sb.alpha[k].value for k in model_SA_r_sb.alpha])
+                    SA_r_sb_status = 'infeasible'
+                    # SA_time = None
+                t2 = time.time()
+                SA_r_sb_time = t2-t1 + t22-t11 #scenario reduction + solution
+                ## KMeans
+                scenarios = all_samples[:, :, l]
+                t11 = time.time()
+                kmeans = KMeans(n_clusters=N).fit(scenarios)
+                samples_r_kmeans = kmeans.cluster_centers_
+                t22 = time.time()
+                model_SA_r_kmeans, solver_SA_r_kmeans = SA.SA_model_pyomo(
+                    Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples_r_kmeans, M, eta, theta
+                )
+                # with a-priori scenario reduction methods from Römisch, 2003
+
+                t1 = time.time()
+                try:
+                    
+                    solution_SA_r_kmeans = solver_SA_r_kmeans.solve(model_SA_r_kmeans, tee=False, logging_level=50,)
+                    
+                    SA_r_kmeans_sol = np.array([model_SA_r_kmeans.p0[k].value for k in model_SA_r_kmeans.p0] + [model_SA_r_kmeans.alpha[k].value for k in model_SA_r_kmeans.alpha])
+                    SA_r_kmeans_status = str(solution_SA_r_kmeans["Solver"][0]['Status'])
+                    
+                except (ApplicationError, ValueError, TypeError):
+                    SA_r_kmeans_sol = np.array([model_SA_r_kmeans.p0[k].value for k in model_SA_r_kmeans.p0] + [model_SA_r_kmeans.alpha[k].value for k in model_SA_r_kmeans.alpha])
+                    SA_r_kmeans_status = 'infeasible'
+                    # SA_time = None
+                t2 = time.time()
+                SA_r_kmeans_time = t2-t1 + t22-t11 #scenario reduction + solution
+
+                # ## KModes
+                # scenarios = all_samples[:, :, l]
+                # t11 = time.time()
+                # kmodes = KModes(n_clusters=N, init='Huang', n_init=N+1, verbose=0).fit(scenarios)
+                # samples_r_kmodes = kmodes.cluster_centroids_
+                # t22 = time.time()
+                # model_SA_r_kmodes, solver_SA_r_kmodes = SA.SA_model_pyomo(
+                #     Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples_r_kmodes, M, eta, theta
+                # )
+                # # with a-priori scenario reduction methods from Römisch, 2003
+
+                # t1 = time.time()
+                # try:
+                    
+                #     solution_SA_r_kmodes = solver_SA_r_kmodes.solve(model_SA_r_kmodes, tee=False, logging_level=50,)
+                    
+                #     SA_r_kmodes_sol = np.array([model_SA_r_kmodes.p0[k].value for k in model_SA_r_kmodes.p0] + [model_SA_r_kmodes.alpha[k].value for k in model_SA_r_kmodes.alpha])
+                #     SA_r_kmodes_status = str(solution_SA_r_kmodes["Solver"][0]['Status'])
+                    
+                # except (ApplicationError, ValueError, TypeError):
+                #     SA_r_kmodes_sol = np.array([model_SA_r_kmodes.p0[k].value for k in model_SA_r_kmodes.p0] + [model_SA_r_kmodes.alpha[k].value for k in model_SA_r_kmodes.alpha])
+                #     SA_r_kmodes_status = 'infeasible'
+                #     # SA_time = None
+                # t2 = time.time()
+                # SA_r_kmodes_time = t2-t1 + t22-t11 #scenario reduction + solution
+
+            # classical monte-carlo based Scenario Approximation
+            samples = all_samples[:N, :, l]
+            model_SA, solver_SA = SA.SA_model_pyomo(
+                Gamma, Beta, ramp_up_down, T, alpha_0, x0, c, samples, M, eta, theta
+            )
             t1 = time.time()
             try:
                 
@@ -300,11 +421,19 @@ def multiple_solve_dro(
                     "DD-DRO": [DRO_sol.flatten(), DRO_status, DRO_time],
                     "SA": [SA_sol.flatten(), SA_status, SA_time],
                     "AR-SA": [IS_sol.flatten(), IS_status, IS_time],
+                    "SA-FF": [SA_r_sol.flatten(), SA_r_status, SA_r_time],
+                    "SA-SB": [SA_r_sb_sol.flatten(), SA_r_sb_status, SA_r_sb_time],
+                    "SA-KMeans": [SA_r_kmeans_sol.flatten(), SA_r_kmeans_status, SA_r_kmeans_time],
+                    # "SA-KModes": [SA_r_kmodes_sol.flatten(), SA_r_kmodes_status, SA_r_kmodes_time],
                 }
             else:
                 res = {
                     "SA": [SA_sol.flatten(), SA_status, SA_time],
                     "AR-SA": [IS_sol.flatten(), IS_status, IS_time],
+                    "SA-FF": [SA_r_sol.flatten(), SA_r_status, SA_r_time],
+                    "SA-SB": [SA_r_sb_sol.flatten(), SA_r_sb_status, SA_r_sb_time],
+                    "SA-KMeans": [SA_r_kmeans_sol.flatten(), SA_r_kmeans_status, SA_r_kmeans_time],
+                    # "SA-KModes": [SA_r_kmodes_sol.flatten(), SA_r_kmodes_status, SA_r_kmodes_time],
                 }
 
 

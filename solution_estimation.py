@@ -66,7 +66,7 @@ def make_plots(cfg, pd_boxplot, pd_time, save_dir, N0, ks, eta, names):
     if cfg.estimation.plot_exec_time:
         plotting.plot_boxplots(pd_time, save_dir, N0, ks, eta, col_name="Exec. Time")
 
-@hydra.main(version_base=None, config_path="conf", config_name="config_grid30_005")
+@hydra.main(version_base=None, config_path="conf", config_name="config_grid6_reduction")
 def main(cfg: DictConfig) -> None:
     # results = utils.map_names(
     #         results,

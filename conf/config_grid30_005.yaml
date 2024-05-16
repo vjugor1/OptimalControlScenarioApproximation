@@ -12,6 +12,7 @@ solution:
   k: 160
   N_step: 30
   L: 50
+  make_reduction: false
   dro: null
     
 data:

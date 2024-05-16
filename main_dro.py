@@ -23,7 +23,7 @@ def map_names(
                     l[new_names[i]] = l.pop(keys[i])
     return results
 
-@hydra.main(version_base=None, config_path="conf", config_name="config_grid6")
+@hydra.main(version_base=None, config_path="conf", config_name="config_grid6_reduction")
 def main(cfg: DictConfig) -> None:
     # config
     grid_name = cfg.grid

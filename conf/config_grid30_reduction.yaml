@@ -12,7 +12,7 @@ solution:
   k: 160
   N_step: 30
   L: 50
-  make_reduction: false
+  make_reduction: true
   dro: null
     
 data:
@@ -20,5 +20,5 @@ data:
 
 
 paths:
-  saves_dir: /app/saves
-  dro_results: /app/saves/dd-dro
+  saves_dir: /app/saves/reduction
+  dro_results: /app/saves/reduction/dd-dro/

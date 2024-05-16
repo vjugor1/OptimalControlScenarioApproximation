@@ -1,17 +1,17 @@
-grid: grid30
+grid: grid300
 
 estimation:
-  N_SA: 453
-  eta: 0.01
+  N_SA: 18
+  eta: 0.001
   plot_exec_time: False
 
 solution:
   T: 3
-  eta: 0.01
+  eta: 0.001
   N0: 3 
-  k: 160
-  N_step: 30
-  L: 50
+  k: 10
+  N_step: 5
+  L: 10
   make_reduction: false
   dro: null
     

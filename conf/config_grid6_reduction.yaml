@@ -12,14 +12,14 @@ solution:
   k: 60 #20
   N_step: 10
   L: 50
-  make_reduction: false
-  dro:
-    M: 0.1
-    theta: 0.001
+  make_reduction: true
+  dro: null
+    # M: 0.1
+    # theta: 0.001
 
 data:
   sigma_scale: 1
 
 paths:
-  saves_dir: /app/saves
-  dro_results: /app/saves/dd-dro
+  saves_dir: /app/saves/reduction
+  dro_results: /app/saves/reduction/dd-dro/
